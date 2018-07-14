@@ -55,9 +55,10 @@ def run_bot(url, username, password):
                     return
             elif buf and client.rooms:
                 text = ''.join(buf)
+                html = '<pre><code>' + text+ '</code></pre>'
                 for (room_id, room) in client.rooms.items():
                     if room_id in allowed_room_ids:
-                        room.send_text(text)
+                        room.send_html(html, body=text)
                 buf = []
 
     client = MatrixClient(url)
