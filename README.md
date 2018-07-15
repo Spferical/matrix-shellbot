@@ -11,3 +11,5 @@ Matrix-shellbot connects to a Matrix (Matrix.org) server and lets users input co
 ## Usage
 
 `$ python3 main.py --help`
+
+Note: environment variables can be used for all options. SHELLBOT\_USERNAME, SHELLBOT\_PASSWORD, SHELLBOT\_HOMESERVER, etc.
