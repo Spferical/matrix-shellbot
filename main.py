@@ -14,7 +14,8 @@ from matrix_client.api import MatrixRequestError
 
 
 @click.command()
-@click.option('--url', default='https://matrix.org', help='homeserver url')
+@click.option('--homeserver', default='https://matrix.org',
+              help='matrix homeserver url')
 @click.argument('username')
 @click.argument('password')
 def run_bot(url, username, password):
@@ -63,7 +64,7 @@ def run_bot(url, username, password):
                         room.send_html(html, body=text)
                 buf = []
 
-    client = MatrixClient(url)
+    client = MatrixClient(homeserver)
     client.login_with_password_no_sync(username, password)
     client.listen_for_events()  # get rid of initial event sync
     client.add_listener(on_event)
