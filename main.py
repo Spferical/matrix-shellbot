@@ -53,16 +53,16 @@ def run_bot(homeserver, authorize, username, password):
         while alive:
             ready = select.select([master], [], [], 0.1)[0]
             if ready:
-                buf.append(os.read(master, 1024).decode('utf8'))
+                buf.append(os.read(master, 1024))
                 print('shell stdout: {}'.format(buf[-1]))
                 if buf[-1] == '':
                     return
             elif buf and client.rooms:
-                text = ''.join(buf)
+                text = b''.join(buf).decode('utf8')
                 html = '<pre><code>' + text+ '</code></pre>'
                 for room in client.rooms.values():
                     room.send_html(html, body=text)
-                buf = []
+                buf.clear()
 
     client = MatrixClient(homeserver)
     client.login_with_password_no_sync(username, password)
