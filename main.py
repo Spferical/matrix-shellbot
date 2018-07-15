@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 import click
-import subprocess
 import sys
 import threading
 import select
 import pty
 import os
-import signal
-from subprocess import PIPE
-from queue import Queue
 from matrix_client.client import MatrixClient
-from matrix_client.api import MatrixRequestError
 
 
 @click.command()
@@ -32,11 +27,10 @@ def run_bot(homeserver, authorize, username, password):
     alive = True
 
     def on_event(event):
-        if (event['type'] == 'm.room.message'
-            and event['sender'] in allowed_users
-            and 'msgtype' in event['content']
-            and event['content']['msgtype'] == 'm.text'):
-
+        if event['type'] == 'm.room.message' and (
+                event['sender'] in allowed_users and
+                'msgtype' in event['content'] and
+                event['content']['msgtype'] == 'm.text'):
             message = str(event['content']['body'])
             if message == '!ctrlc':
                 print('sending ctrl+c')
@@ -63,7 +57,7 @@ def run_bot(homeserver, authorize, username, password):
                     return
             elif buf and client.rooms:
                 text = b''.join(buf).decode('utf8')
-                html = '<pre><code>' + text+ '</code></pre>'
+                html = '<pre><code>' + text + '</code></pre>'
                 for room in client.rooms.values():
                     room.send_html(html, body=text)
                 buf.clear()
@@ -79,6 +73,7 @@ def run_bot(homeserver, authorize, username, password):
     except KeyboardInterrupt:
         alive = False
         sys.exit(0)
+
 
 if __name__ == "__main__":
     run_bot(auto_envvar_prefix='SHELLBOT')
