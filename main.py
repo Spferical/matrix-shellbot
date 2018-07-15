@@ -16,10 +16,13 @@ from matrix_client.api import MatrixRequestError
 @click.command()
 @click.option('--homeserver', default='https://matrix.org',
               help='matrix homeserver url')
+@click.option('--authorize', default=['@matthew:vgd.me'], multiple=True,
+              help='authorize user to issue commands '
+              '& invite the bot to rooms')
 @click.argument('username')
 @click.argument('password')
-def run_bot(url, username, password):
-    allowed_room_ids = []
+def run_bot(homeserver, authorize, username, password):
+    allowed_users = authorize
     master, slave = pty.openpty()
     shell_env = os.environ.copy()
     shell_env['TERM'] = 'vt100'
@@ -31,10 +34,9 @@ def run_bot(url, username, password):
 
     def on_event(event):
         if (event['type'] == 'm.room.message'
-            and event['sender'] != client.user_id
+            and event['sender'] in allowed_users
             and 'msgtype' in event['content']
-            and event['content']['msgtype'] == 'm.text'
-            and event['room_id'] in allowed_room_ids):
+            and event['content']['msgtype'] == 'm.text'):
 
             message = str(event['content']['body'])
             print('shell stdin: {}'.format(message))
@@ -59,9 +61,8 @@ def run_bot(url, username, password):
             elif buf and client.rooms:
                 text = ''.join(buf)
                 html = '<pre><code>' + text+ '</code></pre>'
-                for (room_id, room) in client.rooms.items():
-                    if room_id in allowed_room_ids:
-                        room.send_html(html, body=text)
+                for room in client.rooms.values():
+                    room.send_html(html, body=text)
                 buf = []
 
     client = MatrixClient(homeserver)
