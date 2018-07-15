@@ -39,10 +39,14 @@ def run_bot(homeserver, authorize, username, password):
             and event['content']['msgtype'] == 'm.text'):
 
             message = str(event['content']['body'])
-            print('shell stdin: {}'.format(message))
-            pin.write(message)
-            pin.write('\n')
-            pin.flush()
+            if message == '!ctrlc':
+                print('sending ctrl+c')
+                os.kill(shell_proc.pid, signal.SIGINT)
+            else:
+                print('shell stdin: {}'.format(message))
+                pin.write(message)
+                pin.write('\n')
+                pin.flush()
 
     def shell_stdout_handler():
         """
