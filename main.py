@@ -23,12 +23,11 @@ from matrix_client.api import MatrixRequestError
 @click.argument('password')
 def run_bot(homeserver, authorize, username, password):
     allowed_users = authorize
-    master, slave = pty.openpty()
     shell_env = os.environ.copy()
     shell_env['TERM'] = 'vt100'
-    shell_proc = subprocess.Popen(['sh'],
-                                  stdin=slave, stdout=slave, stderr=slave,
-                                  universal_newlines=True)
+    child_pid, master = pty.fork()
+    if child_pid == 0:  # we are the child
+        os.execlpe('sh', 'sh', shell_env)
     pin = os.fdopen(master, 'w')
     alive = True
 
@@ -41,7 +40,8 @@ def run_bot(homeserver, authorize, username, password):
             message = str(event['content']['body'])
             if message == '!ctrlc':
                 print('sending ctrl+c')
-                os.kill(shell_proc.pid, signal.SIGINT)
+                pin.write('\x03')
+                pin.flush()
             else:
                 print('shell stdin: {}'.format(message))
                 pin.write(message)
