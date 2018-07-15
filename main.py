@@ -20,6 +20,8 @@ from matrix_client.api import MatrixRequestError
 def run_bot(url, username, password):
     allowed_room_ids = []
     master, slave = pty.openpty()
+    shell_env = os.environ.copy()
+    shell_env['TERM'] = 'vt100'
     shell_proc = subprocess.Popen(['sh'],
                                   stdin=slave, stdout=slave, stderr=slave,
                                   universal_newlines=True)
