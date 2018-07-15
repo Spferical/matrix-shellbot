@@ -1,0 +1,1 @@
+-e git://github.com/Spferical/matrix-python-sdk.git@e200f0b811cdc8d87f9778395b372aa7d06e9beb#egg=matrix_client
