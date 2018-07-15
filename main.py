@@ -56,7 +56,6 @@ def run_bot(homeserver, authorize, username, password):
                 buf.append(os.read(master, 1024).decode('utf8'))
                 print('shell stdout: {}'.format(buf[-1]))
                 if buf[-1] == '':
-                    print('empty output, returning')
                     return
             elif buf and client.rooms:
                 text = ''.join(buf)
