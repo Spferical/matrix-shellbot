@@ -5,7 +5,22 @@ import threading
 import select
 import pty
 import os
+import re
 from matrix_client.client import MatrixClient
+
+
+escape_parser = re.compile(r'\x1b\[?([\d;]*)(\w)')
+
+
+def remove_escape_codes(shell_out):
+    start = 0
+    escapes = re.finditer(escape_parser, shell_out)
+    html = []
+    for match in escapes:
+        html.append(shell_out[start:match.start()].replace('\r', ''))
+        start = match.end()
+    html.append(shell_out[start:])
+    return ''.join(html)
 
 
 @click.command()
@@ -56,7 +71,8 @@ def run_bot(homeserver, authorize, username, password):
                 if buf[-1] == '':
                     return
             elif buf and client.rooms:
-                text = b''.join(buf).decode('utf8')
+                shell_out = b''.join(buf).decode('utf8')
+                text = remove_escape_codes(shell_out)
                 html = '<pre><code>' + text + '</code></pre>'
                 for room in client.rooms.values():
                     room.send_html(html, body=text)
