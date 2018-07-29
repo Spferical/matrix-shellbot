@@ -6,9 +6,14 @@ import select
 import pty
 import os
 import re
+import requests
+import time
+import logging
 from matrix_client.client import MatrixClient
 
 
+logger = logging.getLogger('shellbot')
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 escape_parser = re.compile(r'\x1b\[?([\d;]*)(\w)')
 
 
@@ -48,11 +53,11 @@ def run_bot(homeserver, authorize, username, password):
                 event['content']['msgtype'] == 'm.text'):
             message = str(event['content']['body'])
             if message == '!ctrlc':
-                print('sending ctrl+c')
+                logger.info('sending ctrl+c')
                 pin.write('\x03')
                 pin.flush()
             else:
-                print('shell stdin: {}'.format(message))
+                logger.info('shell stdin: {}'.format(message))
                 pin.write(message)
                 pin.write('\n')
                 pin.flush()
@@ -67,11 +72,11 @@ def run_bot(homeserver, authorize, username, password):
             ready = select.select([master], [], [], 0.1)[0]
             if ready:
                 buf.append(os.read(master, 1024))
-                print('shell stdout: {}'.format(buf[-1]))
                 if buf[-1] == '':
                     return
             elif buf and client.rooms:
                 shell_out = b''.join(buf).decode('utf8')
+                logger.info('shell stdout: {}'.format(shell_out))
                 text = remove_escape_codes(shell_out)
                 html = '<pre><code>' + text + '</code></pre>'
                 for room in client.rooms.values():
@@ -82,13 +87,22 @@ def run_bot(homeserver, authorize, username, password):
     client.login_with_password_no_sync(username, password)
     client.listen_for_events()  # get rid of initial event sync
     client.add_listener(on_event)
+
     shell_stdout_handler_thread = threading.Thread(target=shell_stdout_handler)
     shell_stdout_handler_thread.start()
-    try:
-        client.listen_forever()
-    except KeyboardInterrupt:
-        alive = False
-        sys.exit(0)
+
+    while True:
+        try:
+            client.listen_forever()
+        except KeyboardInterrupt:
+            alive = False
+            sys.exit(0)
+        except requests.exceptions.Timeout:
+            logger.warn("disconnected. Trying again in 5s...")
+            time.sleep(5)
+        except requests.exceptions.ConnectionError:
+            logger.warn("disconnected. Trying again in 5s...")
+            time.sleep(5)
 
 
 if __name__ == "__main__":
