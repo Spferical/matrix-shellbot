@@ -121,9 +121,10 @@ def run_bot(homeserver, authorize, username, password):
             stop.set()
             sys.exit(0)
         except requests.exceptions.Timeout:
-            logger.warn("disconnected. Trying again in 5s...")
+            logger.warn("timeout. Trying again in 5s...")
             time.sleep(5)
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.ConnectionError as e:
+            logger.warn(repr(e))
             logger.warn("disconnected. Trying again in 5s...")
             time.sleep(5)
 
