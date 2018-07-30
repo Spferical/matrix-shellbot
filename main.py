@@ -13,7 +13,8 @@ from matrix_client.client import MatrixClient
 
 
 logger = logging.getLogger('shellbot')
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+                    format="%(asctime)s:%(name)s:%(levelname)s:%(message)s")
 escape_parser = re.compile(r'\x1b\[?([\d;]*)(\w)')
 
 
