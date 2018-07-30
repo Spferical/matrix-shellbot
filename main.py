@@ -29,10 +29,9 @@ def remove_escape_codes(shell_out):
     return ''.join(html)
 
 
-def on_event(event, pin, allowed_users):
+def on_message(event, pin, allowed_users):
     """
-    If event is a text message event by an authorized user, this function
-    writes its contents to the shell.
+    Writes contents of a message event to the shell.
 
     event: matrix event dict
     pin: file object for pty master
@@ -43,8 +42,7 @@ def on_event(event, pin, allowed_users):
 
     Special cases: !ctrlc sends a sequence as if the user typed ctrl+c.
     """
-    if event['type'] == 'm.room.message' and (
-            event['sender'] in allowed_users and
+    if event['sender'] in allowed_users and (
             'msgtype' in event['content'] and
             event['content']['msgtype'] == 'm.text'):
         message = str(event['content']['body'])
@@ -57,6 +55,23 @@ def on_event(event, pin, allowed_users):
             pin.write(message)
             pin.write('\n')
             pin.flush()
+
+
+def get_inviter(invite_state, user_id):
+    for event in invite_state['events']:
+        logger.info(event)
+        if event['type'] == 'm.room.member' and (
+                event['content']['membership'] == 'invite' and
+                event['state_key'] == user_id):
+            return event['sender']
+
+
+def on_invite(client, room_id, state, allowed_users):
+    inviter = get_inviter(state, client.user_id)
+    if inviter in allowed_users:
+        logger.info("joining room {} from {}'s invitation"
+                     .format(room_id, inviter))
+        client.join_room(room_id)
 
 
 def shell_stdout_handler(master, client, stop):
@@ -107,8 +122,13 @@ def run_bot(homeserver, authorize, username, password):
 
     client = MatrixClient(homeserver)
     client.login_with_password_no_sync(username, password)
+    # listen for invites during initial event sync so we don't miss any
+    client.add_invite_listener(
+        lambda room_id, state: on_invite(client, room_id, state,
+                                         allowed_users))
     client.listen_for_events()  # get rid of initial event sync
-    client.add_listener(lambda event: on_event(event, pin, allowed_users))
+    client.add_listener(lambda event: on_message(event, pin, allowed_users),
+                        event_type='m.room.message')
 
     shell_stdout_handler_thread = threading.Thread(
         target=shell_stdout_handler, args=(master, client, stop))
