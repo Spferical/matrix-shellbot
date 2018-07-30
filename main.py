@@ -28,6 +28,64 @@ def remove_escape_codes(shell_out):
     return ''.join(html)
 
 
+def on_event(event, pin, allowed_users):
+    """
+    If event is a text message event by an authorized user, this function
+    writes its contents to the shell.
+
+    event: matrix event dict
+    pin: file object for pty master
+    allowed_users: users authorized to send input to the shell
+
+    A newline is appended to the text contents when written, so a one-line
+    message may be interpreted as a command.
+
+    Special cases: !ctrlc sends a sequence as if the user typed ctrl+c.
+    """
+    if event['type'] == 'm.room.message' and (
+            event['sender'] in allowed_users and
+            'msgtype' in event['content'] and
+            event['content']['msgtype'] == 'm.text'):
+        message = str(event['content']['body'])
+        if message == '!ctrlc':
+            logger.info('sending ctrl+c')
+            pin.write('\x03')
+            pin.flush()
+        else:
+            logger.info('shell stdin: {}'.format(message))
+            pin.write(message)
+            pin.write('\n')
+            pin.flush()
+
+
+def shell_stdout_handler(master, client, stop):
+    """
+    Reads output from the shell process until there's a 0.1s+ period of no
+    output. Then, sends it as a message to all allowed matrix rooms.
+
+    master: master pipe for the pty. gives us read/write with the shell.
+    client: matrix client
+    stop: threading.Event that activates when the bot shuts down
+
+    This function exits when stop is set.
+    """
+    buf = []
+    while not stop.is_set():
+        ready = select.select([master], [], [], 0.1)[0]
+        if ready:
+            buf.append(os.read(master, 1024))
+            if buf[-1] == '':
+                return
+        elif buf and client.rooms:
+            shell_out = b''.join(buf).decode('utf8')
+            logger.info('shell stdout: {}'.format(shell_out))
+            text = remove_escape_codes(shell_out)
+            html = '<pre><code>' + text + '</code></pre>'
+            for room in client.rooms.values():
+                room.send_html(html, body=text)
+            buf.clear()
+
+
 @click.command()
 @click.option('--homeserver', default='https://matrix.org',
               help='matrix homeserver url')
@@ -44,58 +102,22 @@ def run_bot(homeserver, authorize, username, password):
     if child_pid == 0:  # we are the child
         os.execlpe('sh', 'sh', shell_env)
     pin = os.fdopen(master, 'w')
-    alive = True
-
-    def on_event(event):
-        if event['type'] == 'm.room.message' and (
-                event['sender'] in allowed_users and
-                'msgtype' in event['content'] and
-                event['content']['msgtype'] == 'm.text'):
-            message = str(event['content']['body'])
-            if message == '!ctrlc':
-                logger.info('sending ctrl+c')
-                pin.write('\x03')
-                pin.flush()
-            else:
-                logger.info('shell stdin: {}'.format(message))
-                pin.write(message)
-                pin.write('\n')
-                pin.flush()
-
-    def shell_stdout_handler():
-        """
-        Reads output from the shell process until there's a 0.1s+ period of no
-        output. Then, sends it as a message to all allowed matrix rooms.
-        """
-        buf = []
-        while alive:
-            ready = select.select([master], [], [], 0.1)[0]
-            if ready:
-                buf.append(os.read(master, 1024))
-                if buf[-1] == '':
-                    return
-            elif buf and client.rooms:
-                shell_out = b''.join(buf).decode('utf8')
-                logger.info('shell stdout: {}'.format(shell_out))
-                text = remove_escape_codes(shell_out)
-                html = '<pre><code>' + text + '</code></pre>'
-                for room in client.rooms.values():
-                    room.send_html(html, body=text)
-                buf.clear()
+    stop = threading.Event()
 
     client = MatrixClient(homeserver)
     client.login_with_password_no_sync(username, password)
     client.listen_for_events()  # get rid of initial event sync
-    client.add_listener(on_event)
+    client.add_listener(lambda event: on_event(event, pin, allowed_users))
 
-    shell_stdout_handler_thread = threading.Thread(target=shell_stdout_handler)
+    shell_stdout_handler_thread = threading.Thread(
+        target=shell_stdout_handler, args=(master, client, stop))
     shell_stdout_handler_thread.start()
 
     while True:
         try:
             client.listen_forever()
         except KeyboardInterrupt:
-            alive = False
+            stop.set()
             sys.exit(0)
         except requests.exceptions.Timeout:
             logger.warn("disconnected. Trying again in 5s...")
