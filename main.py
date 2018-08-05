@@ -21,17 +21,14 @@ logger = logging.getLogger('shellbot')
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                     format="%(asctime)s:%(name)s:%(levelname)s:%(message)s")
 escape_parser = re.compile(r'\x1b\[?([\d;]*)(\w)')
+cleared_line_parser = re.compile(r'[^\n]*\x1b\[K')
 
 
-def remove_escape_codes(shell_out):
+def handle_escape_codes(shell_out):
     start = 0
-    escapes = re.finditer(escape_parser, shell_out)
-    html = []
-    for match in escapes:
-        html.append(shell_out[start:match.start()].replace('\r', ''))
-        start = match.end()
-    html.append(shell_out[start:])
-    return ''.join(html)
+    shell_out_after_clears= re.sub(cleared_line_parser, "", shell_out)
+    shell_out_noescapes = re.sub(escape_parser, "", shell_out_after_clears)
+    return shell_out_noescapes
 
 
 def on_message(event, pin, allowed_users):
@@ -146,7 +143,7 @@ def shell_stdout_handler(master, client, stop):
             for shell_out in stdout_to_messages(
                     buf, decoder, flush=not shell_has_more):
                 logger.info('shell stdout: {}'.format(shell_out))
-                text = remove_escape_codes(shell_out)
+                text = handle_escape_codes(shell_out)
                 html = '<pre><code>' + text + '</code></pre>'
                 for room in client.rooms.values():
                     room.send_html(html, body=text)
