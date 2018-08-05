@@ -9,11 +9,13 @@ import re
 import requests
 import time
 import logging
+import codecs
 from matrix_client.client import MatrixClient
 
 
 SHELL_CMD_PREFIX = '!shell '
 CTRLC_CMD = '!ctrlc'
+MAX_STDOUT_PER_MSG = 1024 * 16
 
 logger = logging.getLogger('shellbot')
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
@@ -78,6 +80,48 @@ def on_invite(client, room_id, state, allowed_users):
         client.join_room(room_id)
 
 
+def stdout_to_messages(buf, incremental_decoder, flush=True):
+    """
+    Returns a list of strings to be sent in separate matrix messages.
+    Mutates buf to include only unsent shell output.
+
+    If flush is True, we output everything we have.
+    Otherwise, we only output if we reach our maximum message size, in which
+    case we split output into multiple messages, doing our best to split on
+    newlines.
+
+    Note that some intermediate output will be kept by the incremental decoder.
+    This is needed so we don't accidentally cut off output in the middle of a
+    utf8 multibyte character.
+
+    buf: list of bytestrings read from shell process, each <=1024 bytes long
+    incremental_decoder: incremental utf8 decoder
+    flush: whether to output all text, even if we haven't reached the message
+           size limit yet
+    """
+    if flush:
+        total_stdout = b''.join(buf)
+        buf.clear()
+        return [incremental_decoder.decode(total_stdout)]
+    elif sum(len(s) for s in buf) > MAX_STDOUT_PER_MSG:
+        # grab <=1k chunks of stdout until we run out or have nearly too much
+        stdout_to_send = []
+        bytes_to_send = 0
+        while buf and len(buf[0]) + bytes_to_send <= MAX_STDOUT_PER_MSG:
+            stdout_to_send.append(buf.pop(0))
+            bytes_to_send += len(stdout_to_send[-1])
+        total_stdout = b''.join(stdout_to_send)
+        # cut off everything until the last newline, if any
+        last_newline = total_stdout.rfind(b'\n')
+        if last_newline != -1:
+            buf.append(total_stdout[last_newline + 1:])
+            return [incremental_decoder.decode(total_stdout[:last_newline])]
+        else:
+            # it's all one huge line. send it anyways.
+            return [incremental_decoder.decode(total_stdout)]
+    return []
+
+
 def shell_stdout_handler(master, client, stop):
     """
     Reads output from the shell process until there's a 0.1s+ period of no
@@ -90,20 +134,22 @@ def shell_stdout_handler(master, client, stop):
     This function exits when stop is set.
     """
     buf = []
+    decoder = codecs.getincrementaldecoder('utf8')()
     while not stop.is_set():
-        ready = select.select([master], [], [], 0.1)[0]
-        if ready:
-            buf.append(os.read(master, 1024))
-            if buf[-1] == '':
+        shell_has_more = select.select([master], [], [], 0.1)[0]
+        if shell_has_more:
+            shell_stdout = os.read(master, 1024)
+            if shell_stdout == '':
                 return
-        elif buf and client.rooms:
-            shell_out = b''.join(buf).decode('utf8')
-            logger.info('shell stdout: {}'.format(shell_out))
-            text = remove_escape_codes(shell_out)
-            html = '<pre><code>' + text + '</code></pre>'
-            for room in client.rooms.values():
-                room.send_html(html, body=text)
-            buf.clear()
+            buf.append(shell_stdout)
+        if buf and client.rooms:
+            for shell_out in stdout_to_messages(
+                    buf, decoder, flush=not shell_has_more):
+                logger.info('shell stdout: {}'.format(shell_out))
+                text = remove_escape_codes(shell_out)
+                html = '<pre><code>' + text + '</code></pre>'
+                for room in client.rooms.values():
+                    room.send_html(html, body=text)
 
 
 @click.command()
