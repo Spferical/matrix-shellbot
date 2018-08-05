@@ -12,6 +12,9 @@ import logging
 from matrix_client.client import MatrixClient
 
 
+SHELL_CMD_PREFIX = '!shell '
+CTRLC_CMD = '!ctrlc'
+
 logger = logging.getLogger('shellbot')
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                     format="%(asctime)s:%(name)s:%(levelname)s:%(message)s")
@@ -46,11 +49,12 @@ def on_message(event, pin, allowed_users):
             'msgtype' in event['content'] and
             event['content']['msgtype'] == 'm.text'):
         message = str(event['content']['body'])
-        if message == '!ctrlc':
+        if message == CTRLC_CMD:
             logger.info('sending ctrl+c')
             pin.write('\x03')
             pin.flush()
-        else:
+        elif message.startswith(SHELL_CMD_PREFIX):
+            message = message[len(SHELL_CMD_PREFIX):]
             logger.info('shell stdin: {}'.format(message))
             pin.write(message)
             pin.write('\n')
