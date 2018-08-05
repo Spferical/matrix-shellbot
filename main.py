@@ -131,7 +131,7 @@ def shell_stdout_handler(master, client, stop):
     This function exits when stop is set.
     """
     buf = []
-    decoder = codecs.getincrementaldecoder('utf8')()
+    decoder = codecs.getincrementaldecoder('utf8')(errors='replace')
     while not stop.is_set():
         shell_has_more = select.select([master], [], [], 0.1)[0]
         if shell_has_more:
