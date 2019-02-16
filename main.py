@@ -13,8 +13,8 @@ import codecs
 from matrix_client.client import MatrixClient
 
 
-SHELL_CMD_PREFIX = '!shell '
-CTRLC_CMD = '!ctrlc'
+SHELL_CMD_REGEX = r'!shell (.*)'
+CTRLC_CMD_REGEX = r'!ctrl\+c|!ctrlc|!shell ctrlc|!shell ctrl\+c'
 MAX_STDOUT_PER_MSG = 1024 * 16
 
 logger = logging.getLogger('shellbot')
@@ -48,16 +48,18 @@ def on_message(event, pin, allowed_users):
             'msgtype' in event['content'] and
             event['content']['msgtype'] == 'm.text'):
         message = str(event['content']['body'])
-        if message == CTRLC_CMD:
+        if re.match(CTRLC_CMD_REGEX, message, flags=re.I):
             logger.info('sending ctrl+c')
             pin.write('\x03')
             pin.flush()
-        elif message.startswith(SHELL_CMD_PREFIX):
-            message = message[len(SHELL_CMD_PREFIX):]
-            logger.info('shell stdin: {}'.format(message))
-            pin.write(message)
-            pin.write('\n')
-            pin.flush()
+        else:
+            cmd_match = re.match(SHELL_CMD_REGEX, message, flags=re.I)
+            if cmd_match:
+                message = cmd_match.group(1)
+                logger.info('shell stdin: {}'.format(message))
+                pin.write(message)
+                pin.write('\n')
+                pin.flush()
 
 
 def get_inviter(invite_state, user_id):
