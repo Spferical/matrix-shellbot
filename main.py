@@ -25,8 +25,12 @@ cleared_line_parser = re.compile(r'[^\n]*\x1b\[K')
 
 
 def handle_escape_codes(shell_out):
-    start = 0
-    shell_out_after_clears= re.sub(cleared_line_parser, "", shell_out)
+    """
+    Parses (as best we can) the raw escape codes in a bunch of shell output
+    and converts it into chatclient-friendly text.
+    shell_out: string of shell output
+    """
+    shell_out_after_clears = re.sub(cleared_line_parser, "", shell_out)
     shell_out_noescapes = re.sub(escape_parser, "", shell_out_after_clears)
     return shell_out_noescapes
 
