@@ -2,6 +2,8 @@
 
 Matrix-shellbot connects to a Matrix (Matrix.org) server and lets users input commands to a shell session.
 
+![screenshot](screenshot.png)
+
 ## Requirements
 - Python v3.6
 - matrix_client
