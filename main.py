@@ -150,6 +150,7 @@ def shell_stdout_handler(master, client, stop):
                     buf, decoder, flush=not shell_has_more):
                 logger.info('shell stdout: {}'.format(shell_out))
                 text = handle_escape_codes(shell_out)
+                text = text.replace('\r', '')
                 html = '<pre><code>' + text + '</code></pre>'
                 for room in client.rooms.values():
                     room.send_html(html, body=text)
