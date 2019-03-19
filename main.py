@@ -79,7 +79,7 @@ def on_invite(client, room_id, state, allowed_users):
     inviter = get_inviter(state, client.user_id)
     if inviter in allowed_users:
         logger.info("joining room {} from {}'s invitation"
-                     .format(room_id, inviter))
+                    .format(room_id, inviter))
         client.join_room(room_id)
 
 
